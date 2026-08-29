@@ -10,7 +10,7 @@ st.set_page_config(
     layout="centered"
 )
 
-# Custom Styling (Dark Green Theme)
+# Custom Styling (Dark Green Theme mirip video)
 st.markdown("""
     <style>
     .stApp {
@@ -45,16 +45,12 @@ st.markdown("""
 st.title("Generator Prompt by AI")
 st.caption("THE ULTIMATE AI DETAILER & PROMPT GENERATOR")
 
-# Mengambil API Key dari Secrets / Environment
+# Ambil API Key otomatis dari Streamlit Secrets atau OS Environment
 api_key = None
 if "GEMINI_API_KEY" in st.secrets:
     api_key = st.secrets["GEMINI_API_KEY"]
 elif "GEMINI_API_KEY" in os.environ:
     api_key = os.environ["GEMINI_API_KEY"]
-
-# Fallback input manual jika API key belum disetel di Secrets
-if not api_key:
-    api_key = st.text_input("Masukkan Google Gemini API Key:", type="password")
 
 st.subheader("Analisis Gambar Detail")
 st.write("Unggah gambar untuk mendapatkan deskripsi prompt super detail yang siap disalin.")
@@ -75,12 +71,14 @@ if uploaded_file:
     
     if st.button("Generate Prompt Detail"):
         if not api_key:
-            st.error("Silakan masukkan GEMINI_API_KEY di Streamlit Secrets atau kolom input di atas.")
+            st.error("GEMINI_API_KEY tidak ditemukan di environment/secrets.")
         else:
             with st.spinner("Menganalisis gambar dan mengekstrak prompt..."):
                 try:
-                    # Konfigurasi API
-                    genai.configure(api_key=api_key)
+                    # Bersihkan spasi/whitespace dari API key
+                    clean_key = str(api_key).strip()
+                    genai.configure(api_key=clean_key)
+                    
                     model = genai.GenerativeModel("gemini-1.5-flash")
                     
                     system_instruction = (
@@ -100,7 +98,7 @@ if uploaded_file:
                 except Exception as e:
                     st.error(f"Terjadi kesalahan: {e}")
 
-# Tampilan Hasil
+# Tampilan Hasil Prompt
 if st.session_state.extracted_prompt:
     st.write("---")
     st.subheader("Hasil Prompt:")
