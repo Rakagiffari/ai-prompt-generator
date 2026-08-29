@@ -1,7 +1,7 @@
 import os
 import streamlit as st
 from PIL import Image
-from google import genai
+import google.generativeai as genai
 
 # Konfigurasi Halaman Streamlit
 st.set_page_config(
@@ -9,18 +9,6 @@ st.set_page_config(
     page_icon="🔍",
     layout="centered"
 )
-
-# Mengambil API Key (Mendukung Streamlit Cloud Secrets & Environment Lokal)
-GEMINI_API_KEY = None
-if "GEMINI_API_KEY" in st.secrets:
-    GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
-elif "GEMINI_API_KEY" in os.environ:
-    GEMINI_API_KEY = os.environ["GEMINI_API_KEY"]
-
-# Inisialisasi Google GenAI Client
-client = None
-if GEMINI_API_KEY:
-    client = genai.Client(api_key=GEMINI_API_KEY)
 
 # Custom Styling (Dark Green Theme)
 st.markdown("""
@@ -57,11 +45,16 @@ st.markdown("""
 st.title("Generator Prompt by AI")
 st.caption("THE ULTIMATE AI DETAILER & PROMPT GENERATOR")
 
-# Input fallback jika API key belum disetel di Secrets
-if not GEMINI_API_KEY:
-    user_key = st.text_input("Masukkan Google Gemini API Key:", type="password")
-    if user_key:
-        client = genai.Client(api_key=user_key)
+# Mengambil API Key dari Secrets / Environment
+api_key = None
+if "GEMINI_API_KEY" in st.secrets:
+    api_key = st.secrets["GEMINI_API_KEY"]
+elif "GEMINI_API_KEY" in os.environ:
+    api_key = os.environ["GEMINI_API_KEY"]
+
+# Fallback input manual jika API key belum disetel di Secrets
+if not api_key:
+    api_key = st.text_input("Masukkan Google Gemini API Key:", type="password")
 
 st.subheader("Analisis Gambar Detail")
 st.write("Unggah gambar untuk mendapatkan deskripsi prompt super detail yang siap disalin.")
@@ -81,25 +74,26 @@ if uploaded_file:
     st.image(img, caption="Gambar yang diunggah", use_container_width=True)
     
     if st.button("Generate Prompt Detail"):
-        if not client:
-            st.error("Silakan atur GEMINI_API_KEY di Streamlit Secrets atau masukkan manual di kolom atas.")
+        if not api_key:
+            st.error("Silakan masukkan GEMINI_API_KEY di Streamlit Secrets atau kolom input di atas.")
         else:
             with st.spinner("Menganalisis gambar dan mengekstrak prompt..."):
                 try:
+                    # Konfigurasi API
+                    genai.configure(api_key=api_key)
+                    model = genai.GenerativeModel("gemini-1.5-flash")
+                    
                     system_instruction = (
                         "Bertindaklah sebagai AI Prompt Engineer profesional. Analisis gambar ini dan buatkan prompt pembuatan gambar AI yang sangat mendalam dan terperinci. "
                         "Jelaskan secara runtut: "
                         "1. Subjek & Pose: Jumlah orang, posisi tubuh, ekspresi wajah, arah pandangan, interaksi. "
                         "2. Pakaian & Tekstur: Model pakaian, detail bahan kain, warna spesifik, aksesoris. "
                         "3. Latar Belakang & Suasana: Ruangan, interior/eksterior, dekorasi di sekitar. "
-                        "4. Pencahayaan & Kamera: Arah datangnya cahaya alami/buatan, soft shadows, kontras sinematik, sudut pengambilan gambar (eye-level/close-up/wide). "
+                        "4. Pencahayaan & Kamera: Arah datangnya cahaya alami/buatan, soft shadows, kontras sinematik, sudut pengambilan gambar. "
                         "Format output: Buat dalam 1 atau 2 paragraf deskriptif padat dalam Bahasa Indonesia yang langsung siap di-copy."
                     )
                     
-                    response = client.models.generate_content(
-                        model="gemini-2.5-flash",
-                        contents=[system_instruction, img]
-                    )
+                    response = model.generate_content([system_instruction, img])
                     
                     st.session_state.extracted_prompt = response.text
                     st.success("Prompt berhasil digenerate!")
