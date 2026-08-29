@@ -1,17 +1,7 @@
 import os
 import streamlit as st
 from PIL import Image
-from dotenv import load_dotenv
 from google import genai
-
-# Load konfigurasi API Key
-load_dotenv()
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-
-# Inisialisasi Google GenAI Client
-client = None
-if GEMINI_API_KEY:
-    client = genai.Client(api_key=GEMINI_API_KEY)
 
 # Konfigurasi Halaman Streamlit
 st.set_page_config(
@@ -20,7 +10,19 @@ st.set_page_config(
     layout="centered"
 )
 
-# Custom Styling (Dark Green Theme mirip video)
+# Mengambil API Key (Mendukung Streamlit Cloud Secrets & Environment Lokal)
+GEMINI_API_KEY = None
+if "GEMINI_API_KEY" in st.secrets:
+    GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
+elif "GEMINI_API_KEY" in os.environ:
+    GEMINI_API_KEY = os.environ["GEMINI_API_KEY"]
+
+# Inisialisasi Google GenAI Client
+client = None
+if GEMINI_API_KEY:
+    client = genai.Client(api_key=GEMINI_API_KEY)
+
+# Custom Styling (Dark Green Theme)
 st.markdown("""
     <style>
     .stApp {
@@ -55,7 +57,12 @@ st.markdown("""
 st.title("Generator Prompt by AI")
 st.caption("THE ULTIMATE AI DETAILER & PROMPT GENERATOR")
 
-# Sub-header
+# Input fallback jika API key belum disetel di Secrets
+if not GEMINI_API_KEY:
+    user_key = st.text_input("Masukkan Google Gemini API Key:", type="password")
+    if user_key:
+        client = genai.Client(api_key=user_key)
+
 st.subheader("Analisis Gambar Detail")
 st.write("Unggah gambar untuk mendapatkan deskripsi prompt super detail yang siap disalin.")
 
@@ -73,14 +80,12 @@ if uploaded_file:
     img = Image.open(uploaded_file)
     st.image(img, caption="Gambar yang diunggah", use_container_width=True)
     
-    # Tombol Analisis
     if st.button("Generate Prompt Detail"):
         if not client:
-            st.error("GEMINI_API_KEY belum diisi di file .env!")
+            st.error("Silakan atur GEMINI_API_KEY di Streamlit Secrets atau masukkan manual di kolom atas.")
         else:
             with st.spinner("Menganalisis gambar dan mengekstrak prompt..."):
                 try:
-                    # Instruksi analisis visual tingkat lanjut
                     system_instruction = (
                         "Bertindaklah sebagai AI Prompt Engineer profesional. Analisis gambar ini dan buatkan prompt pembuatan gambar AI yang sangat mendalam dan terperinci. "
                         "Jelaskan secara runtut: "
@@ -101,7 +106,7 @@ if uploaded_file:
                 except Exception as e:
                     st.error(f"Terjadi kesalahan: {e}")
 
-# Tampilan Hasil Prompt
+# Tampilan Hasil
 if st.session_state.extracted_prompt:
     st.write("---")
     st.subheader("Hasil Prompt:")
