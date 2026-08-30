@@ -5,14 +5,12 @@ import requests
 import streamlit as st
 from PIL import Image
 
-# Konfigurasi Halaman Streamlit
 st.set_page_config(
     page_title="AI Prompt Detailer",
     page_icon="🔍",
     layout="centered"
 )
 
-# Custom Styling (Dark Green Theme)
 st.markdown("""
     <style>
     .stApp {
@@ -72,7 +70,6 @@ if uploaded_file:
         else:
             with st.spinner("Menganalisis gambar dan mengekstrak prompt..."):
                 try:
-                    # Konversi gambar ke base64
                     buffered = io.BytesIO()
                     img_format = img.format if img.format else "JPEG"
                     img.save(buffered, format=img_format)
@@ -89,15 +86,6 @@ if uploaded_file:
                         "Format output: Buat dalam 1 atau 2 paragraf deskriptif padat dalam Bahasa Indonesia yang langsung siap di-copy."
                     )
 
-                    # Endpoint REST API Gemini
-                    url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
-                    
-                    # Header autentikasi resmi untuk format kunci baru AQ. dan AIza
-                    headers = {
-                        "Content-Type": "application/json",
-                        "x-goog-api-key": api_key
-                    }
-
                     payload = {
                         "contents": [
                             {
@@ -113,6 +101,19 @@ if uploaded_file:
                             }
                         ]
                     }
+
+                    # Penyesuaian Header otomatis: Kunci AQ. menggunakan Authorization Bearer
+                    if api_key.startswith("AQ."):
+                        url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
+                        headers = {
+                            "Content-Type": "application/json",
+                            "Authorization": f"Bearer {api_key}"
+                        }
+                    else:
+                        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
+                        headers = {
+                            "Content-Type": "application/json"
+                        }
 
                     response = requests.post(url, headers=headers, json=payload)
                     res_json = response.json()
