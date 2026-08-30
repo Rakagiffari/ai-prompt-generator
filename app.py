@@ -1,16 +1,16 @@
 import os
-import io
-import base64
-import requests
 import streamlit as st
 from PIL import Image
+from google import genai
 
+# Konfigurasi Tampilan Streamlit
 st.set_page_config(
     page_title="AI Prompt Detailer",
     page_icon="🔍",
     layout="centered"
 )
 
+# Custom Theme (Dark Green Mirip Video)
 st.markdown("""
     <style>
     .stApp {
@@ -45,9 +45,14 @@ st.markdown("""
 st.title("Generator Prompt by AI")
 st.caption("THE ULTIMATE AI DETAILER & PROMPT GENERATOR")
 
-# Ambil API key dari Secrets
+# Ambil API key dari Secrets atau Environment
 api_key = st.secrets.get("GEMINI_API_KEY", os.environ.get("GEMINI_API_KEY", ""))
 api_key = str(api_key).strip().strip('"').strip("'")
+
+# Inisialisasi Google GenAI Client
+client = None
+if api_key:
+    client = genai.Client(api_key=api_key)
 
 st.subheader("Analisis Gambar Detail")
 st.write("Unggah gambar untuk mendapatkan deskripsi prompt super detail yang siap disalin.")
@@ -65,17 +70,11 @@ if uploaded_file:
     st.image(img, caption="Gambar yang diunggah", use_container_width=True)
     
     if st.button("Generate Prompt Detail"):
-        if not api_key:
+        if not client:
             st.error("GEMINI_API_KEY belum terpasang di Secrets.")
         else:
             with st.spinner("Menganalisis gambar dan mengekstrak prompt..."):
                 try:
-                    buffered = io.BytesIO()
-                    img_format = img.format if img.format else "JPEG"
-                    img.save(buffered, format=img_format)
-                    img_b64 = base64.b64encode(buffered.getvalue()).decode("utf-8")
-                    mime_type = uploaded_file.type or "image/jpeg"
-
                     system_instruction = (
                         "Bertindaklah sebagai AI Prompt Engineer profesional. Analisis gambar ini dan buatkan prompt pembuatan gambar AI yang sangat mendalam dan terperinci. "
                         "Jelaskan secara runtut: "
@@ -85,47 +84,14 @@ if uploaded_file:
                         "4. Pencahayaan & Kamera: Arah datangnya cahaya alami/buatan, soft shadows, kontras sinematik, sudut pengambilan gambar. "
                         "Format output: Buat dalam 1 atau 2 paragraf deskriptif padat dalam Bahasa Indonesia yang langsung siap di-copy."
                     )
-
-                    payload = {
-                        "contents": [
-                            {
-                                "parts": [
-                                    {"text": system_instruction},
-                                    {
-                                        "inline_data": {
-                                            "mime_type": mime_type,
-                                            "data": img_b64
-                                        }
-                                    }
-                                ]
-                            }
-                        ]
-                    }
-
-                    # Penyesuaian Header otomatis: Kunci AQ. menggunakan Authorization Bearer
-                    if api_key.startswith("AQ."):
-                        url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
-                        headers = {
-                            "Content-Type": "application/json",
-                            "Authorization": f"Bearer {api_key}"
-                        }
-                    else:
-                        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
-                        headers = {
-                            "Content-Type": "application/json"
-                        }
-
-                    response = requests.post(url, headers=headers, json=payload)
-                    res_json = response.json()
-
-                    if response.status_code == 200:
-                        prompt_text = res_json["candidates"][0]["content"]["parts"][0]["text"]
-                        st.session_state.extracted_prompt = prompt_text
-                        st.success("Prompt berhasil digenerate!")
-                    else:
-                        error_msg = res_json.get("error", {}).get("message", response.text)
-                        st.error(f"Gagal generate prompt: {error_msg}")
-
+                    
+                    response = client.models.generate_content(
+                        model="gemini-2.5-flash",
+                        contents=[system_instruction, img]
+                    )
+                    
+                    st.session_state.extracted_prompt = response.text
+                    st.success("Prompt berhasil digenerate!")
                 except Exception as e:
                     st.error(f"Terjadi kesalahan: {e}")
 
