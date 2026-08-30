@@ -1,7 +1,9 @@
 import os
+import io
+import base64
+import requests
 import streamlit as st
 from PIL import Image
-import google.generativeai as genai
 
 # Konfigurasi Halaman Streamlit
 st.set_page_config(
@@ -10,7 +12,7 @@ st.set_page_config(
     layout="centered"
 )
 
-# Custom Styling (Dark Green Theme mirip video)
+# Custom Styling (Dark Green Theme)
 st.markdown("""
     <style>
     .stApp {
@@ -45,23 +47,18 @@ st.markdown("""
 st.title("Generator Prompt by AI")
 st.caption("THE ULTIMATE AI DETAILER & PROMPT GENERATOR")
 
-# Ambil API Key otomatis dari Streamlit Secrets atau OS Environment
-api_key = None
-if "GEMINI_API_KEY" in st.secrets:
-    api_key = st.secrets["GEMINI_API_KEY"]
-elif "GEMINI_API_KEY" in os.environ:
-    api_key = os.environ["GEMINI_API_KEY"]
+# Ambil API key dari Secrets
+api_key = st.secrets.get("GEMINI_API_KEY", os.environ.get("GEMINI_API_KEY", ""))
+api_key = str(api_key).strip().strip('"').strip("'")
 
 st.subheader("Analisis Gambar Detail")
 st.write("Unggah gambar untuk mendapatkan deskripsi prompt super detail yang siap disalin.")
 
-# File Uploader
 uploaded_file = st.file_uploader(
     "Klik, Drag & Drop, atau Paste Gambar", 
     type=["jpg", "jpeg", "png", "webp"]
 )
 
-# State untuk menyimpan hasil prompt
 if "extracted_prompt" not in st.session_state:
     st.session_state.extracted_prompt = ""
 
@@ -71,16 +68,17 @@ if uploaded_file:
     
     if st.button("Generate Prompt Detail"):
         if not api_key:
-            st.error("GEMINI_API_KEY tidak ditemukan di environment/secrets.")
+            st.error("GEMINI_API_KEY belum terpasang di Secrets.")
         else:
             with st.spinner("Menganalisis gambar dan mengekstrak prompt..."):
                 try:
-                    # Bersihkan spasi/whitespace dari API key
-                    clean_key = str(api_key).strip()
-                    genai.configure(api_key=clean_key)
-                    
-                    model = genai.GenerativeModel("gemini-1.5-flash")
-                    
+                    # Konversi gambar ke base64
+                    buffered = io.BytesIO()
+                    img_format = img.format if img.format else "JPEG"
+                    img.save(buffered, format=img_format)
+                    img_b64 = base64.b64encode(buffered.getvalue()).decode("utf-8")
+                    mime_type = uploaded_file.type or "image/jpeg"
+
                     system_instruction = (
                         "Bertindaklah sebagai AI Prompt Engineer profesional. Analisis gambar ini dan buatkan prompt pembuatan gambar AI yang sangat mendalam dan terperinci. "
                         "Jelaskan secara runtut: "
@@ -90,15 +88,40 @@ if uploaded_file:
                         "4. Pencahayaan & Kamera: Arah datangnya cahaya alami/buatan, soft shadows, kontras sinematik, sudut pengambilan gambar. "
                         "Format output: Buat dalam 1 atau 2 paragraf deskriptif padat dalam Bahasa Indonesia yang langsung siap di-copy."
                     )
+
+                    # Endpoint REST API Gemini (Bypass bug gRPC / 401 token issue)
+                    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
                     
-                    response = model.generate_content([system_instruction, img])
-                    
-                    st.session_state.extracted_prompt = response.text
-                    st.success("Prompt berhasil digenerate!")
+                    payload = {
+                        "contents": [
+                            {
+                                "parts": [
+                                    {"text": system_instruction},
+                                    {
+                                        "inline_data": {
+                                            "mime_type": mime_type,
+                                            "data": img_b64
+                                        }
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+
+                    response = requests.post(url, json=payload)
+                    res_json = response.json()
+
+                    if response.status_code == 200:
+                        prompt_text = res_json["candidates"][0]["content"]["parts"][0]["text"]
+                        st.session_state.extracted_prompt = prompt_text
+                        st.success("Prompt berhasil digenerate!")
+                    else:
+                        error_msg = res_json.get("error", {}).get("message", response.text)
+                        st.error(f"Gagal generate prompt: {error_msg}")
+
                 except Exception as e:
                     st.error(f"Terjadi kesalahan: {e}")
 
-# Tampilan Hasil Prompt
 if st.session_state.extracted_prompt:
     st.write("---")
     st.subheader("Hasil Prompt:")
