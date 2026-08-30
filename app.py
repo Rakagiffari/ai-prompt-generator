@@ -89,9 +89,15 @@ if uploaded_file:
                         "Format output: Buat dalam 1 atau 2 paragraf deskriptif padat dalam Bahasa Indonesia yang langsung siap di-copy."
                     )
 
-                    # Endpoint REST API Gemini (Bypass bug gRPC / 401 token issue)
-                    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
+                    # Endpoint REST API Gemini
+                    url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
                     
+                    # Header autentikasi resmi untuk format kunci baru AQ. dan AIza
+                    headers = {
+                        "Content-Type": "application/json",
+                        "x-goog-api-key": api_key
+                    }
+
                     payload = {
                         "contents": [
                             {
@@ -108,7 +114,7 @@ if uploaded_file:
                         ]
                     }
 
-                    response = requests.post(url, json=payload)
+                    response = requests.post(url, headers=headers, json=payload)
                     res_json = response.json()
 
                     if response.status_code == 200:
